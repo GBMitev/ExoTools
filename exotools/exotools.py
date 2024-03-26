@@ -4,7 +4,7 @@ def states_df(path, manifold_to_state = None):
     from numpy import select
 
     column_names = ["NN","E","gns","J","tau","e/f","Manifold","v","Lambda","Sigma","Omega"]
-    df = read_csv(f"{path}", delim_whitespace = True,names = column_names)
+    df = read_csv(f"{path}", sep='\s+',names = column_names)
 
     tau_cond = [df["tau"] == "+", df["tau"]=="-"]
     tau_vals = [1.0,-1.0]
@@ -161,7 +161,10 @@ def write_dat(df, fname):
     with open(fname, "w") as file:    
         file.writelines(lines)
     print("done")
-        
+
+def predicted_shifts(states, marvel):
+    return "Hello World!"
+
 class Units:
     def wavenumber_to_nm(wavenumber):
         return 10e6/wavenumber

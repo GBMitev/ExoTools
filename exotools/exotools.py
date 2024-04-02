@@ -165,37 +165,124 @@ def write_dat(df, fname):
 def predicted_shifts(states, marvel):
     return "Hello World!"
 
-class Units:
-    def wavenumber_to_nm(wavenumber):
-        return 10e6/wavenumber
-    
-    def nm_to_wavenumber(nm):
-        return 10e6/nm
+def read_wavefunction(wavefunction_path, **kwargs):
+    from pandarallel import pandarallel, core
+    from pandas import read_csv
 
-    def wavenumber_to_mhz(wavenumber):
-        return 29979.2458*wavenumber
+    cores = kwargs.get("cores", core.NB_PHYSICAL_CORES)
 
-    def mhz_to_wavenumber(mhz):
-        return mhz/29979.2458
+    pandarallel.initialize(nb_workers=cores, progress_bar=True, verbose=0)
 
-    def wavenumber_to_energy(wavenumber, end_units = "hartree"):
-        if end_units == "hartree":
-            return 0.0000046*wavenumber
-        elif end_units == "ev":
-            return 0.00012*wavenumber
-
-    def energy_to_wavenumber(value, starting_units="hartree"):
-        if starting_units == "hartree":
-            return value/0.0000046
-        elif starting_units == "ev":
-            return value/0.00012
-
-    def bohr_to_angstrom(bohr):
-        return 0.529177249*bohr
-
-    def angstrom_to_bohr(angstrom):
-        return angstrom/0.529177249
+    wavefunction = read_csv(wavefunction_path, sep = "\s+", skiprows = 1, skipfooter = 1, engine = "python",names = ["wavefunction","||","J","parity","NN"])
+    wavefunction = wavefunction.drop(columns = ["||"])
+    wavefunction["tau"] = wavefunction.parallel_apply(lambda x: 1 if x["parity"]==0 else -1, axis = 1)
+    wavefunction = wavefunction[["wavefunction","J","tau","NN"]]
+    return wavefunction 
     
 
+def trim_wavefunction(R, wavefunc, thresh_delta_r):
+    max_R = R[-1]
+    min_R = max_R-thresh_delta_r
+    data = [[R[num], wavefunc[num]] for num, r in enumerate(R) if min_R <= r <= max_R]
+    R, wavefunc = zip(*data)
+    return R, wavefunc
+
+def filter_wavefunction(wf, J, tau, NN):
+    wf = wf[
+        (wf["J"]==J)&
+        (wf["tau"]==tau)&
+        (wf["NN"]==NN)
+        ]["wavefunction"].to_numpy()
+    return wf
+
+def integrate_wavefunction(wf, R, thresh_delta_r, J, tau, NN):
+    from scipy.integrate import trapezoid
     
+    wf = filter_wavefunction(wf, J, tau, NN)
+    R, wf = trim_wavefunction(R, wf, thresh_delta_r)
+    dR = R[1]-R[0]
+    integ = trapezoid(wf, R, dx = dR)
+    return integ
+
+def integrate_all_wavefunctions(wf, R, thresh_delta_r, **kwargs):
+    from pandarallel import pandarallel, core
+    cores = kwargs.get("cores",core.NB_PHYSICAL_CORES)
+    pandarallel.initialize(progress_bar=True, nb_workers=cores)
+
+    integrals = wf.groupby(["J","tau","NN"], as_index=False).size()[["J","tau","NN"]]
+    integrals["Integ"] = integrals.parallel_apply(lambda x: integrate_wavefunction(wf, R, thresh_delta_r, x["J"], x["tau"], x["NN"]), axis = 1)
+    return integrals
+
+def get_NN(df):
     
+    tau_p = df[df["tau"]==1].sort_values(["J","E"])
+    tau_n = df[df["tau"]==-1].sort_values(["J","E"])
+
+    Numbered = pd.DataFrame(columns = [*tau_p.columns])
+
+    for J in df["J"].unique():
+        p = tau_p[tau_p["J"]==J].reset_index(drop = True)
+        n = tau_n[tau_n["J"]==J].reset_index(drop = True)
+
+        p["NN"] = p.index.values+1
+        n["NN"] = n.index.values+1
+
+        Numbered = pd.concat([Numbered, p])
+        Numbered = pd.concat([Numbered, n])
+    
+    return Numbered
+
+def get_eigenvalues(output_path):
+    import subprocess as sp
+    from pandas import read_csv
+    from numpy import select
+
+    grep = '       J      i        Energy/cm  State   v  lambda spin   sigma   omega  parity\n'
+    
+    with open(output_path) as file:
+        lines = file.readlines()
+    
+    starts_of_eigenvalues = [num for num, l in enumerate(lines) if grep in l]
+
+    eigenvals = []
+    for s in starts_of_eigenvalues:
+        s+=1
+        l = ""
+        component = []
+        while "ZPE" not in l and grep not in l:
+            l = lines[s].replace("||","")
+            
+            component.append(l)
+            s+=1
+        eigenvals = eigenvals+component[:-1]
+
+    eigenvals = [i for i in eigenvals if i not in ["\n"]]
+
+    with open("get_eigenvalues_temp_file.txt", "w") as file:
+        file.writelines(eigenvals)    
+
+    eigenvalues = read_csv("./get_eigenvalues_temp_file.txt", sep = "\s+", names = ["J","NN","E","State","v","Lambda","Spin","Sigma","Omega","tau","Manifold"])
+
+    running = sp.Popen("rm get_eigenvalues_temp_file.txt", shell = True, stdout=sp.PIPE)
+    running.communicate()
+
+    eigenvalues = eigenvalues[["NN","E","J","tau","Manifold","v","Lambda","Sigma","Omega"]]
+    eigenvalues["E"]-=eigenvalues["E"].min()
+
+    tau_cond = [eigenvalues["tau"] == "-",eigenvalues["tau"] == "+"]
+    tau_vals = [-1, 1]
+    eigenvalues["tau"] = select(tau_cond, tau_vals)
+    return eigenvalues
+
+def match_eigenvalues_and_states(eigenvalues, states):
+    merged = eigenvalues.merge(states, on = ["J","tau","Manifold","v","Lambda","Sigma","Omega"], how = "inner", suffixes = ["_eigenval","_states"])
+    merged["E_diff"] = abs(merged["E_eigenval"]-merged["E_states"])
+    max_deviation = merged["E_diff"].max()
+    if max_deviation > 1e-5:
+        print(f"WARNING: Your energies don't match up, you have a maximum deviation of {max_deviation} please check your eigenvalues and states file")
+        merged = eigenvalues.merge(states, on = ["J","tau","Manifold","v","Lambda","Sigma","Omega"], how = "outer", suffixes = ["_eigenval","_states"])
+        return merged
+    
+    merged = merged[["NN_eigenval","E_states","gns","J","tau","e/f","Manifold","v","Lambda","Sigma","Omega"]]
+    merged = merged.rename(columns = {"NN_eigenval":"NN","E_states":"E"})
+    return merged

@@ -286,3 +286,77 @@ def match_eigenvalues_and_states(eigenvalues, states):
     merged = merged[["NN_eigenval","E_states","gns","J","tau","e/f","Manifold","v","Lambda","Sigma","Omega"]]
     merged = merged.rename(columns = {"NN_eigenval":"NN","E_states":"E"})
     return merged
+
+def reduced_mass(m1, m2):
+    mu = (m1*m2)/(m1+m2)
+    return mu
+
+def rotational_factor(r, m1, m2, units):
+    '''
+    Will return the rotational constant B of a diatomic made of atoms with masses m1, m2 for a given nuclear separation r.
+
+    If units = "cm-1":
+        B = hbar/4*pi*c * 1/I
+            where:
+            
+            hbar is Planck's constant in erg seconds
+            c is the speed of light in cm/s
+            I is mu*r^2
+            mu is the reduced mass in units of grams
+            r  is the nuclear separation in units of cm
+    If units = "hartree":
+        B = hbar/mu*r^2 
+        where:
+            hbar = 1
+            mu is the reduced mass in units of electron masses
+            r  is the nuclear separation in units of bohr
+
+    Inputs:
+        r = nuclear separation in Angstroms
+        m1 = mass of atom 1 in atomic mass units  (Daltons)
+        m2 = mass of atom 2 in atomic mass units  (Daltons)
+        units = units of B (cm-1 or Hartree)
+    '''
+    from numpy import pi
+
+    hbar_erg_s      = 6.62606957e-27/(2*pi) # erg seconds
+
+    amu_to_g  = 1.660538921000E-24 #grams
+    amu_to_me = 1822.8884861185961 #electron mass
+
+    speed_of_light = 29979245800.0000 #cm/second
+
+    angstrom_to_bohr = 1.88972612457 #bohr
+    angstrom_to_cm   = 1e-8 #cm
+
+    if units == "hartree":
+        m1 *= amu_to_me 
+        m2 *= amu_to_me
+        r  *= angstrom_to_bohr
+        I   = reduced_mass(m1, m2)*r**2
+
+        B = 1/(2*I)
+        return B
+    elif units in ["cm", "cm-1", "wavenumber"]:
+        m1 *= amu_to_g
+        m2 *= amu_to_g
+        r  *= angstrom_to_cm   
+        I   = reduced_mass(m1, m2)*r**2
+        
+        B   = hbar_erg_s/(4*pi*speed_of_light)*(1/I)
+
+        return B
+
+def effective_potential(r,V,m1,m2,J):
+    from numpy import array
+
+    r = array([*r])
+    V = array([*V])
+
+    B = rotational_factor(r, m1, m2, "wavenumber")
+
+    E_rot = J*(J+1)*B
+
+    V += E_rot
+
+    return V

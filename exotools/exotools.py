@@ -360,3 +360,44 @@ def effective_potential(r,V,m1,m2,J):
     V += E_rot
 
     return V
+
+def effective_potential_features(r, V_eff):
+    from scipy.signal import find_peaks
+    from numpy import nan, ndarray
+
+    idx_min = find_peaks(-V_eff)[0]
+    idx_max = find_peaks(V_eff)[0]
+
+    min_type = "rep" if len(idx_min) == 0 else "bnd"
+    max_type = "asm" if len(idx_max) == 0 else "bar"
+    
+    pec_type = min_type + "_" +  max_type
+
+    idx_De = {"rep_asm":None,"bnd_asm":-1,"bnd_bar":idx_max}
+
+    idx_Re = {"rep_asm":None,"bnd_asm":idx_min,"bnd_bar":idx_min}
+
+    idx_Re = idx_Re[pec_type] if idx_Re[pec_type] is not None else None
+
+    if idx_Re is not None:
+        Re = r[idx_Re]
+        Te = V_eff[idx_Re]
+    else:
+        Re = nan
+        Te = nan
+
+    idx_De = idx_De[pec_type] if idx_De[pec_type] is not None else None
+
+    if idx_De is not None:
+        De = V_eff[idx_De]
+        RDe = r[idx_De]
+    else:
+        De = nan
+        RDe = nan
+    
+    Re = Re if type(Re) != ndarray or Re is nan else Re[0]
+    Te = Te if type(Te) != ndarray or Te is nan else Te[0]
+    RDe = RDe if type(RDe) != ndarray or RDe is nan else RDe[0]
+    De = De if type(De) != ndarray or De is nan else De[0]
+    
+    return Re, Te, RDe, De

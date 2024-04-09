@@ -213,6 +213,16 @@ def integrate_all_wavefunctions(wf, R, thresh_delta_r, **kwargs):
     integrals["Integ"] = integrals.parallel_apply(lambda x: integrate_wavefunction(wf, R, thresh_delta_r, x["J"], x["tau"], x["NN"]), axis = 1)
     return integrals
 
+def integrate_all_wavefunctions_vectorize(wf, R, thresh_delta_r, **kwargs):
+    from pandarallel import pandarallel, core
+    from numpy import vectorize
+    cores = kwargs.get("cores",core.NB_PHYSICAL_CORES)
+    pandarallel.initialize(progress_bar=True, nb_workers=cores)
+
+    integrals = wf.groupby(["J","tau","NN"], as_index=False).size()[["J","tau","NN"]]
+    integrals["Integ"] = integrals.parallel_apply(lambda x: vectorize(integrate_wavefunction(wf, R, thresh_delta_r, x["J"], x["tau"], x["NN"])), axis = 1)
+    return integrals
+
 def get_NN(df):
     
     tau_p = df[df["tau"]==1].sort_values(["J","E"])
@@ -330,21 +340,20 @@ def rotational_factor(r, m1, m2, units):
     angstrom_to_cm   = 1e-8 #cm
 
     if units == "hartree":
-        m1 *= amu_to_me 
-        m2 *= amu_to_me
-        r  *= angstrom_to_bohr
-        I   = reduced_mass(m1, m2)*r**2
+        m1_me   = m1*amu_to_me 
+        m2_me   = m2*amu_to_me
+        r_bohr  = r*angstrom_to_bohr
+        I       = reduced_mass(m1_me, m2_me)*r_bohr**2
 
         B = 1/(2*I)
         return B
     elif units in ["cm", "cm-1", "wavenumber"]:
-        m1 *= amu_to_g
-        m2 *= amu_to_g
-        r  *= angstrom_to_cm   
-        I   = reduced_mass(m1, m2)*r**2
+        m1_g = m1*amu_to_g
+        m2_g = m2*amu_to_g
+        r_cm = r*angstrom_to_cm   
+        I     = reduced_mass(m1_g, m2_g)*r_cm**2
         
         B   = hbar_erg_s/(4*pi*speed_of_light)*(1/I)
-
         return B
 
 def effective_potential(r,V,m1,m2,J):
@@ -357,9 +366,9 @@ def effective_potential(r,V,m1,m2,J):
 
     E_rot = J*(J+1)*B
 
-    V += E_rot
+    V_eff = V+E_rot
 
-    return V
+    return V_eff
 
 def effective_potential_features(r, V_eff):
     from scipy.signal import find_peaks
@@ -399,5 +408,4 @@ def effective_potential_features(r, V_eff):
     Te = Te if type(Te) != ndarray or Te is nan else Te[0]
     RDe = RDe if type(RDe) != ndarray or RDe is nan else RDe[0]
     De = De if type(De) != ndarray or De is nan else De[0]
-    
     return Re, Te, RDe, De

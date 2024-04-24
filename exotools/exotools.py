@@ -1,4 +1,7 @@
 # %%
+def states_cols():
+    return ["NN","E","gns","J","tau","e/f","Manifold","v","Lambda","Sigma","Omega"]
+    
 def states_df(path, manifold_to_state = None):
     from pandas import read_csv
     from numpy import select
@@ -57,13 +60,14 @@ def filter_trans(states_path, trans_path, label, upper, lower, trans_style = Tru
     return trans.drop(columns=[upper_label, lower_label]) if trans_style == True else trans
 
 def write_trans_file(trans, fname):
+    from tqdm import tqdm
     lines = []
-    for nf, ni, A, nu in trans.itertuples(index = False):
+    for nf, ni, A, nu in tqdm(trans.itertuples(index = False)):
         line = \
             f"{nf:12d}"+" "+\
-                f"{ni:12d}"+" "*2+\
-                f"{A:10.4e}".upper()+" "*8+\
-                f"{nu:12.6f}"+"\n"
+                f"{ni:12d}"+" "+\
+                f"{A:11.4e}".upper()+" "+\
+                f"{nu:19.6f}"+"\n"
         
         lines.append(line)
 
@@ -71,9 +75,40 @@ def write_trans_file(trans, fname):
         file.writelines(lines)  
     return "done"
 
+def reset_state_index(pruned,Number_column_name= "N"):
+    pruned       = pruned.rename(columns={Number_column_name:"N_old"})
+    pruned["N"] = pruned.index +1
+    pruned       = pruned[["N","N_old","E","gns","J","tau","e/f","Manifold","v","Lambda","Sigma","Omega"]]
+    return pruned
+
+def merge_stf(upper,lower, trans, counting_num, full = False, counting_num_mapping=None):
+    cols = [counting_num, "J","tau"] if counting_num_mapping is None else [counting_num, counting_num_mapping, "J","tau"]
+    
+    trans = trans.merge(upper[cols],left_on = "nf", right_on = counting_num, how = "inner")
+    trans = trans.merge(lower[cols],left_on = "ni", right_on = counting_num, how = "inner", suffixes = ["_f","_i"])
+    
+    counting_num = counting_num if counting_num_mapping is None else counting_num_mapping
+    
+    N_f = counting_num+"_f"
+    N_i = counting_num+"_i"
+
+    trans = trans[[N_f,N_i,"J_f","J_i","tau_f","tau_i","A","nu"]].rename(columns = {N_f:"nf", N_i:"ni"})
+    
+    return trans if full == True else trans[["nf", "ni", "A","nu"]]
+
+def bound_to_bound_stf(bound_states_file, trans, Number_column_name = "N", rigorous = False):
+    bound_states_file = reset_state_index(bound_states_file, Number_column_name)
+
+    bound_trans = merge_stf(bound_states_file,bound_states_file,trans,"N_old",full = True, counting_num_mapping="N")
+
+    bound_states = bound_states_file[["N","E","gns","J","tau","e/f","Manifold","v","Lambda","Sigma","Omega"]]
+
+    return bound_states, bound_trans
+
+
 def write_states_file(states, fname):
     lines = []
-    for NN, E, gns, J,tau, ef, Manifold, v, Lambda, Sigma, Omega in states.itertuples(index=False):
+    for NN, E, gns, J,tau, ef, Manifold, v, Lambda, Sigma, Omega in states[["NN","E","gns","J","tau","e/f","Manifold","v","Lambda","Sigma","Omega"]].itertuples(index=False):
         if J%1 == 0:
             J_line = f"{J:1d}"+" "
         else:
@@ -90,8 +125,8 @@ def write_states_file(states, fname):
             f"{tau}"+" "+\
             f"{ef}"+" "+\
             f"{Manifold:<{10}}"+" "+\
-            f"{v:3d}"+"  "+\
-            f"{Lambda:1d}"+" "*4+\
+            f"{v:3d}"+" "+\
+            f"{Lambda:2d}"+" "*4+\
             f"{Sigma:>4.1f}"+" "*4+\
             f"{Omega:>4.1f}"+"\n"
 
@@ -409,3 +444,4 @@ def effective_potential_features(r, V_eff):
     RDe = RDe if type(RDe) != ndarray or RDe is nan else RDe[0]
     De = De if type(De) != ndarray or De is nan else De[0]
     return Re, Te, RDe, De
+

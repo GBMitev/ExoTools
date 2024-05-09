@@ -2,11 +2,24 @@
 def states_cols():
     return ["NN","E","gns","J","tau","e/f","Manifold","v","Lambda","Sigma","Omega"]
     
-def states_df(path, manifold_to_state = None):
+def states_df(path, manifold_to_state = None, extra_cols=None, end_cols=None):
     from pandas import read_csv
     from numpy import select
+    
+    if extra_cols is not None:
+        Unc = "Unc" if "Unc" in extra_cols else "Empty"
+        Lifetime = "Lifetime" if "Lifetime" in extra_cols else "Empty"
+        Lande = "Lande" if "Lande" in extra_cols else "Empty"
 
+        extra_cols = [i for i in [Unc, Lifetime, Lande] if i != "Empty"]
+    
     column_names = ["NN","E","gns","J","tau","e/f","Manifold","v","Lambda","Sigma","Omega"]
+    
+    if extra_cols is not None:
+        column_names = column_names[0:4]+extra_cols+column_names[4:]
+
+    if end_cols is not None:
+        column_names = column_names + end_cols
     df = read_csv(f"{path}", sep='\s+',names = column_names)
 
     tau_cond = [df["tau"] == "+", df["tau"]=="-"]
@@ -30,7 +43,7 @@ def trans_df(path):
 
     return df
 
-def get_full_trans(states, trans):
+def get_full_trans(states, trans, columns = None):
 
     trans  = trans  if type(trans)  != str else trans_df(trans)
     states = states if type(states) != str else states_df(states)
@@ -38,7 +51,7 @@ def get_full_trans(states, trans):
     full = trans.merge(states, left_on = "nf", right_on = "NN").drop(columns=["NN"])
     full = full.merge(states, left_on = "ni", right_on = "NN", suffixes = ["_upper","_lower"]).drop(columns = ["NN"])
 
-    return full
+    return full if columns is None else full[columns]
     
 def filter_trans(states_path, trans_path, label, upper, lower, trans_style = True):
     states = states_df(states_path)[["NN",label]]
@@ -82,7 +95,7 @@ def reset_state_index(pruned,Number_column_name= "N"):
     return pruned
 
 def merge_stf(upper,lower, trans, counting_num, full = False, counting_num_mapping=None):
-    cols = [counting_num, "J","tau"] if counting_num_mapping is None else [counting_num, counting_num_mapping, "J","tau"]
+    cols = [counting_num, "J","tau", "Manifold"] if counting_num_mapping is None else [counting_num, counting_num_mapping, "J","tau", "Manifold"]
     
     trans = trans.merge(upper[cols],left_on = "nf", right_on = counting_num, how = "inner")
     trans = trans.merge(lower[cols],left_on = "ni", right_on = counting_num, how = "inner", suffixes = ["_f","_i"])
@@ -92,7 +105,7 @@ def merge_stf(upper,lower, trans, counting_num, full = False, counting_num_mappi
     N_f = counting_num+"_f"
     N_i = counting_num+"_i"
 
-    trans = trans[[N_f,N_i,"J_f","J_i","tau_f","tau_i","A","nu"]].rename(columns = {N_f:"nf", N_i:"ni"})
+    trans = trans[[N_f,N_i,"J_f","J_i","tau_f","tau_i","Manifold_f","Manifold_i","A","nu"]].rename(columns = {N_f:"nf", N_i:"ni"})
     
     return trans if full == True else trans[["nf", "ni", "A","nu"]]
 
@@ -137,7 +150,43 @@ def write_states_file(states, fname):
     
     return fname+"has been written :)"
     
+def write_full_states_file(states, fname):
+    lines = []
 
+    for NN, E, gns, J,Unc, Lifetime, Lande, tau, ef, Manifold, v, Lambda, Sigma, Omega,Type, E_Calc in states[["NN","E","gns","J","Unc","Lifetime","Lande","tau","e/f","Manifold","v","Lambda","Sigma","Omega","Type","E_Calc"]].itertuples(index=False):
+        if J%1 == 0:
+            J_line = f"{J:1d}"+" "
+        else:
+            J_line = f"{J:4.1f}"+" "
+    
+        if type(tau) != str:
+            tau = "+" if tau == 1 else "-"
+
+        line = \
+            f"{NN:12d}"+" "+\
+            f"{E:{12}.6f}"[:12]+" "+\
+            f"{gns:6d}"+" "*4+\
+            J_line+\
+            f"{Unc:{12}.6f}"[:12]+" "+\
+            f"{Lifetime:12.4e}".upper()+" "+\
+            f"{Lande:{10}.6f}"[:10]+" "+\
+            f"{tau}"+" "+\
+            f"{ef}"+" "+\
+            f"{Manifold:<{10}}"+" "+\
+            f"{v:3d}"+" "+\
+            f"{Lambda:2d}"+" "*4+\
+            f"{Sigma:>4.1f}"+" "*4+\
+            f"{Omega:>4.1f}"+" "+\
+            f"{Type}"[0:2]+" "+\
+            f"{E_Calc:{12}.6f}"[:12]+"\n"
+
+        lines.append(line)
+    
+    with open(fname, "w") as file:
+        file.writelines(lines)
+    
+    return fname+"has been written :)"
+    
 def isolate_bound_transitions(states, trans,state_energy_limits):
     trans  = trans  if type(trans)  != str else trans_df(trans)
     states = states if type(states) != str else states_df(states)

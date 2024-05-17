@@ -1,4 +1,5 @@
 # %%
+from .dependencies import *
 def states_cols():
     return ["NN","E","gns","J","tau","e/f","Manifold","v","Lambda","Sigma","Omega"]
     
@@ -249,17 +250,16 @@ def write_dat(df, fname):
 def predicted_shifts(states, marvel):
     return "Hello World!"
 
-def read_wavefunction(wavefunction_path, **kwargs):
+def read_wavefunction(wavefunction_path):
     from pandarallel import pandarallel, core
     from pandas import read_csv
-
-    cores = kwargs.get("cores", core.NB_PHYSICAL_CORES)
-
-    pandarallel.initialize(nb_workers=cores, progress_bar=True, verbose=0)
+    from numpy import select
 
     wavefunction = read_csv(wavefunction_path, sep = "\s+", skiprows = 1, skipfooter = 1, engine = "python",names = ["wavefunction","||","J","parity","NN"])
     wavefunction = wavefunction.drop(columns = ["||"])
-    wavefunction["tau"] = wavefunction.parallel_apply(lambda x: 1 if x["parity"]==0 else -1, axis = 1)
+    tau_conds    = [wavefunction["parity"]==1,wavefunction["parity"]==0]
+    tau_vals     = [-1,1]
+    wavefunction["tau"] = select(tau_conds, tau_vals)
     wavefunction = wavefunction[["wavefunction","J","tau","NN"]]
     return wavefunction 
     

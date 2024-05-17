@@ -18,9 +18,9 @@ def wavenumber_to_energy(wavenumber, end_units = "hartree"):
 
 def energy_to_wavenumber(value, starting_units="hartree"):
     if starting_units == "hartree":
-        return value/0.0000046
+        return value*219474.63
     elif starting_units == "ev":
-        return value/0.00012
+        return value*8065.73
 
 def bohr_to_angstrom(bohr):
     return 0.529177249*bohr

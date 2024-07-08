@@ -27,3 +27,9 @@ def bohr_to_angstrom(bohr):
 
 def angstrom_to_bohr(angstrom):
     return angstrom/0.529177249
+
+def debye_to_au(debye):
+    return 0.393456*debye
+
+def au_to_debye(au):
+    return au/0.393456

@@ -76,7 +76,14 @@ def filter_trans(states_path, trans_path, label, upper, lower, trans_style = Tru
 def write_trans_file(trans, fname):
     from tqdm import tqdm
     lines = []
-    for nf, ni, A, nu in tqdm(trans.itertuples(index = False)):
+    total_len = len(trans)
+    
+    trans["nf"] = trans["nf"].astype(int)
+    trans["ni"] = trans["ni"].astype(int)
+    trans["A"] = trans["A"].astype(float)
+    trans["nu"] = trans["nu"].astype(float)
+
+    for nf, ni, A, nu in tqdm(trans[["nf","ni","A","nu"]].itertuples(index = False), total=total_len):
         line = \
             f"{nf:12d}"+" "+\
                 f"{ni:12d}"+" "+\
@@ -106,7 +113,7 @@ def merge_stf(upper,lower, trans, counting_num, full = False, counting_num_mappi
     N_f = counting_num+"_f"
     N_i = counting_num+"_i"
 
-    trans = trans[[N_f,N_i,"J_f","J_i","tau_f","tau_i","Manifold_f","Manifold_i","A","nu"]].rename(columns = {N_f:"nf", N_i:"ni"})
+    trans = trans.drop(columns = [f"{counting_num}_f", f"{counting_num}_i"])
     
     return trans if full == True else trans[["nf", "ni", "A","nu"]]
 

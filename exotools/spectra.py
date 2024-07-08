@@ -25,7 +25,7 @@ def partition_function_maxJ(temperature, states):
         partfunc.append(partition_function(temperature, current_J_states))
     return J_range,partfunc
 
-def read_stick_output(path):
+def read_stick_output(path, predicted_shifts = True):
     
     from pandas import DataFrame
         
@@ -49,8 +49,11 @@ def read_stick_output(path):
     rows  = []
     for l in lines:
         rows.append(l.replace("\n","").replace("<-","").split())
-
-    transition_columns = ["nu","I","J_upper","E_upper","J_lower","E_lower","tau_upper","e/f_upper","Manifold_upper","v_upper","Lambda_upper","Sigma_upper","Omega_upper","tau_lower","e/f_lower","Manifold_lower","v_lower","Lambda_lower","Sigma_lower","Omega_lower"]
+    if predicted_shifts == True:
+        transition_columns = ["nu","I","J_upper","E_upper","J_lower","E_lower","Unc_upper","Lifetime_upper","Lande_upper","tau_upper","e/f_upper","Manifold_upper","v_upper","Lambda_upper","Sigma_upper","Omega_upper","Type_upper","E_calc_upper","Unc_lower","Lifetime_lower","Lande_lower","tau_lower","e/f_lower","Manifold_lower","v_lower","Lambda_lower","Sigma_lower","Omega_lower","Type_lower","E_calc_lower"]
+    else:
+        transition_columns = ["nu","I","J_upper","E_upper","J_lower","E_lower","tau_upper","e/f_upper","Manifold_upper","v_upper","Lambda_upper","Sigma_upper","Omega_upper","tau_lower","e/f_lower","Manifold_lower","v_lower","Lambda_lower","Sigma_lower","Omega_lower"]
+    
     stick = DataFrame(rows, columns = transition_columns)
 
     stick["nu"]            = stick["nu"]            .astype("float")
@@ -73,6 +76,19 @@ def read_stick_output(path):
     stick["Lambda_lower"]  = stick["Lambda_lower"]  .astype("float")
     stick["Sigma_lower"]   = stick["Sigma_lower"]   .astype("float")
     stick["Omega_lower"]   = stick["Omega_lower"]   .astype("float")
+    
+    if predicted_shifts == True:
+        stick["Unc_upper"]     = stick["Unc_upper"]     .astype("float")
+        stick["Unc_lower"]     = stick["Unc_lower"]     .astype("float")
+        stick["Lifetime_upper"]= stick["Lifetime_upper"].astype("float")
+        stick["Lifetime_lower"]= stick["Lifetime_lower"].astype("float")
+        stick["Lande_upper"]   = stick["Lande_upper"]   .astype("float")
+        stick["Lande_lower"]   = stick["Lande_lower"]   .astype("float")
+        stick["Type_upper"]    = stick["Type_upper"]    .astype("str")
+        stick["Type_lower"]    = stick["Type_lower"]    .astype("str")
+        stick["E_calc_upper"]  = stick["E_calc_upper"]  .astype("float")
+        stick["E_calc_lower"]  = stick["E_calc_lower"]  .astype("float")
+        
     return stick
 
 def read_stick(path):

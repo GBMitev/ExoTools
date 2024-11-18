@@ -40,7 +40,7 @@ def states_df(path, manifold_to_state = None, extra_cols=None, end_cols=None):
 def trans_df(path):
     from pandas import read_csv
     
-    df = read_csv(path, delim_whitespace = True,names=["nf","ni","A","nu"])
+    df = read_csv(path, sep = "\s+",names=["nf","ni","A","nu"])
 
     return df
 
@@ -105,8 +105,8 @@ def reset_state_index(pruned,Number_column_name= "N"):
 def merge_stf(upper,lower, trans, counting_num, full = False, counting_num_mapping=None):
     cols = [counting_num, "J","tau", "Manifold"] if counting_num_mapping is None else [counting_num, counting_num_mapping, "J","tau", "Manifold"]
     
-    trans = trans.merge(upper[cols],left_on = "nf", right_on = counting_num, how = "inner")
-    trans = trans.merge(lower[cols],left_on = "ni", right_on = counting_num, how = "inner", suffixes = ["_f","_i"])
+    trans = trans.merge(upper,left_on = "nf", right_on = counting_num, how = "inner")
+    trans = trans.merge(lower,left_on = "ni", right_on = counting_num, how = "inner", suffixes = ["_f","_i"])
     
     counting_num = counting_num if counting_num_mapping is None else counting_num_mapping
     

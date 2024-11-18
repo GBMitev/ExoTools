@@ -94,3 +94,19 @@ def read_stick_output(path, predicted_shifts = True):
 def read_stick(path):
     stick = pd.read_csv(path, sep = "\s+",names = ["Energy","Absorption"])
     return stick
+
+def calculate_intensity(A, g_final, nu, E_init, temperature, partfunc):
+    c = 29979245800.0000 #cm s-1 from Duo
+    c_2 = 1.432 #cm K   https://doi.org/10.1016/0031-8914(49)90062-2
+
+    Intes_term_1 = (g_final*A)/(8*np.pi*c*nu**2)
+    Intes_term_2 = np.exp(-c_2*E_init/temperature)*(1-np.exp(-c_2*nu/temperature))/partfunc
+    Intes = Intes_term_1*Intes_term_2
+    return Intes
+
+
+def calculate_intensity_NLTE(A, g_final, nu, E_init):
+    c = 29979245800.0000 #cm s-1 from Duo
+    Intes_term_1 = (g_final*A)/(8*np.pi*c*nu**2)
+    Intes = Intes_term_1
+    return Intes
